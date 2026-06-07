@@ -6,7 +6,7 @@ local.properties
 *.iml
 captures/
 .cxx/
-
+.DS_Store
 # Signed-APK output — keep credentials & artifacts out of source control.
 # (Anchored with a leading slash so these only match the top-level output/ dir
 #  and are not shadowed by the generic build/ rule above.)
