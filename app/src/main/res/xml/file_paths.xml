@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Activity log files live in filesDir/logs and are shared via FileProvider. -->
+    <files-path name="logs" path="logs/" />
+</paths>

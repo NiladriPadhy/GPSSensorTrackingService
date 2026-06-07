@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Network (for map tiles) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Location -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- Foreground service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Alarms / boot -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Battery optimization (optional, used for guidance) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Keep CPU awake while the always-on service runs (Doze resilience) -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <!--
+        Package visibility (Android 11+ / targetSdk 30+): without these, the app
+        cannot resolve or launch the OEM auto-start / battery-manager screens that
+        the "Keep tracking alive" screen deep-links into. Each entry makes one
+        OEM system app visible so resolveActivity()/startActivity() succeed.
+    -->
+    <queries>
+        <package android:name="com.miui.securitycenter" />        <!-- Xiaomi / Redmi / POCO -->
+        <package android:name="com.coloros.safecenter" />         <!-- OPPO / Realme -->
+        <package android:name="com.oppo.safe" />                  <!-- older OPPO -->
+        <package android:name="com.oneplus.security" />           <!-- OnePlus -->
+        <package android:name="com.vivo.permissionmanager" />     <!-- vivo -->
+        <package android:name="com.iqoo.secure" />               <!-- vivo / iQOO -->
+        <package android:name="com.huawei.systemmanager" />       <!-- Huawei / Honor -->
+        <package android:name="com.samsung.android.lool" />       <!-- Samsung One UI -->
+        <package android:name="com.samsung.android.sm" />         <!-- older Samsung -->
+        <package android:name="com.asus.mobilemanager" />         <!-- ASUS -->
+    </queries>
+
+    <application
+        android:name=".FieldSurveyApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.FieldSurveyPOC"
+        tools:targetApi="34">
+
+        <!-- Google Maps API key (set MAPS_API_KEY in local.properties) -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.FieldSurveyPOC">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".service.LocationTrackingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <service
+            android:name=".service.AppForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the app process alive across the day so daily shift-start/stop alarms reliably trigger the location tracking service." />
+        </service>
+
+        <receiver
+            android:name=".scheduler.ShiftAlarmReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".service.NotificationRedeliveryReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".scheduler.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>

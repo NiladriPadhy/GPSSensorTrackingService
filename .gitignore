@@ -1,0 +1,15 @@
+# Project build artifacts
+.gradle/
+build/
+.idea/
+local.properties
+*.iml
+captures/
+.cxx/
+
+# Signed-APK output — keep credentials & artifacts out of source control.
+# (Anchored with a leading slash so these only match the top-level output/ dir
+#  and are not shadowed by the generic build/ rule above.)
+/output/*.apk
+/output/build/*.jks
+/output/build/*.keystore
