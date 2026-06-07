@@ -51,32 +51,30 @@ Three approaches were evaluated:
 
 ## 3. Data Model
 
-```csharp
-public class Shift
-{
-    public Guid   Id { get; set; }
-    public string UserId { get; set; }
-    public DateTime StartUtc { get; set; }
-    public DateTime? EndUtc { get; set; }
-    public double TotalDistanceMeters { get; set; }   // running total
-    public bool   Synced { get; set; }
-}
+```kotlin
+data class Shift(
+    val id: Long = 0,
+    val userId: String,
+    val startUtcMillis: Long,
+    val endUtcMillis: Long? = null,
+    val totalDistanceMeters: Double = 0.0,   // running total
+    val synced: Boolean = false
+)
 
-public class LocationPoint
-{
-    public Guid   Id { get; set; }
-    public Guid   ShiftId { get; set; }
-    public double Latitude { get; set; }
-    public double Longitude { get; set; }
-    public double AccuracyMeters { get; set; }
-    public double? SpeedMps { get; set; }
-    public DateTime TimestampUtc { get; set; }
-    public bool   Accepted { get; set; }     // passed filters
-    public bool   Synced { get; set; }
-}
+data class LocationPoint(
+    val id: Long = 0,
+    val shiftId: Long,
+    val latitude: Double,
+    val longitude: Double,
+    val accuracyMeters: Double,
+    val speedMps: Double? = null,
+    val timestampUtcMillis: Long,
+    val accepted: Boolean = false,   // passed filters
+    val synced: Boolean = false
+)
 ```
 
-Storage: **SQLite** (`sqlite-net-pcl`) on device; Postgres + PostGIS server-side.
+Storage: **SQLite via Room** on device; Postgres + PostGIS server-side.
 
 ---
 
@@ -128,23 +126,23 @@ Only **accepted** points contribute to distance and the rendered route.
 
 Between every two consecutive accepted points, compute the great-circle distance and add it to the running total. **Do not recompute from scratch each time.**
 
-```csharp
-public static double HaversineMeters(
-    double lat1, double lon1, double lat2, double lon2)
-{
-    const double R = 6_371_000;
-    double dLat = (lat2 - lat1) * Math.PI / 180;
-    double dLon = (lon2 - lon1) * Math.PI / 180;
-    double a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
-             + Math.Cos(lat1 * Math.PI / 180)
-             * Math.Cos(lat2 * Math.PI / 180)
-             * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
-    return 2 * R * Math.Asin(Math.Sqrt(a));
+```kotlin
+fun haversineMeters(
+    lat1: Double, lon1: Double,
+    lat2: Double, lon2: Double
+): Double {
+    val r = 6_371_000.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat / 2).pow(2) +
+            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+            sin(dLon / 2).pow(2)
+    return 2 * r * asin(sqrt(a))
 }
 
 // On each accepted point:
-shift.TotalDistanceMeters +=
-    HaversineMeters(prev.Lat, prev.Lon, curr.Lat, curr.Lon);
+shift.totalDistanceMeters +=
+    haversineMeters(prev.lat, prev.lon, curr.lat, curr.lon)
 ```
 
 Persist the running total to SQLite so a crash/restart never loses progress.
@@ -209,11 +207,12 @@ Map provider options:
 
 | Provider | Notes |
 |---|---|
-| `Microsoft.Maui.Controls.Maps` | Native Google maps, simple, needs API key |
-| **Mapsui** | OpenStreetMap, free, supports offline tiles |
+| **Google Maps Compose** (`maps-compose`) | Native Google maps for Compose, simple, needs API key |
+| **osmdroid / MapLibre** | OpenStreetMap, free, supports offline tiles |
 | Mapbox | High-quality styling, paid above free tier |
 
-For a field-survey app where users may operate in low-connectivity areas, **Mapsui with cached OSM tiles** is a strong choice.
+For a field-survey app where users may operate in low-connectivity areas,
+**osmdroid/MapLibre with cached OSM tiles** is a strong choice.
 
 ---
 
@@ -293,12 +292,13 @@ differ.*
 | Background | Two **foreground services** + **AlarmManager** daily scheduling |
 | Package | `com.fieldsurvey.poc` |
 
-> **Platform note.** The design (Part I) targeted .NET MAUI with `sqlite-net-pcl`
-> and Mapsui. The POC was built **natively on Android** for tighter control of
-> foreground-service behaviour, Android 14 notification rules, and the
+> **Platform note.** Part I is a technology-approach study; its data model
+> (Section 3) and Haversine sketch (Section 6) are illustrative Kotlin. The POC
+> was built **natively on Android** with **Kotlin + Jetpack Compose** for tight
+> control of foreground-service behaviour, Android 14 notification rules, and the
 > FusedLocation batching semantics that proved critical to distance accuracy
-> (Section 19). The C# data model in Section 3 maps directly onto the Kotlin/Room
-> entities in Section 15.
+> (Section 19). The design data model in Section 3 maps directly onto the
+> Room entities in Section 15.
 
 ---
 
@@ -638,9 +638,22 @@ The route-vertex and motion logic was hardened in `GpsFilter` and
   via a per-minute ticker.
 - **Live speed card** — while the tracking service is reporting fixes, Home
   shows a large `NN km/h` readout (with m/s beneath), fed by a `StateFlow`
-  exposed from `LocationTrackingService`. It auto-hides when not tracking. The
-  value is the GPS Doppler speed — the same signal that drives the stationary
-  filter — so it is smooth and accurate for both walking and driving.
+  exposed from `LocationTrackingService`. The value is the GPS Doppler speed —
+  the same signal that drives the stationary filter — so it is smooth and
+  accurate for both walking and driving. To avoid flicker (many fused/network
+  fixes omit speed), the flow **keeps the last known value** on speed-less fixes
+  and is cleared only when the service stops; it is seeded to 0 on start so the
+  card appears immediately and stays put for the whole session.
+- **Reset today's data** — shown **only while viewing the current day**. A
+  confirmation dialog guards a destructive one-tap clear that, in order:
+  (1) resets the running service's in-memory counters + motion/anchor state
+  (`LocationTrackingService.resetTodayData()`) so it doesn't keep accumulating
+  onto stale values, (2) deletes today's `LocationPoint` and `DayLog` rows
+  (`deleteForDate`), and (3) deletes today's log file (`AppLog.deleteForDate`).
+  Past days cannot be wiped from this control. The Home cards update instantly
+  because they observe the Room `Flow`.
+- The Home screen is **vertically scrollable** so every card/button (including
+  Reset at the bottom) is reachable on any screen size.
 - **Route screen** has a **Map / List** segmented control:
   - **Map** — polyline (split on > 2 min gaps) with Start/End markers, auto-fit
     bounds.
@@ -667,6 +680,8 @@ The route-vertex and motion logic was hardened in `GpsFilter` and
 - Deletes `DayLog` rows, `LocationPoint` rows, and log files older than the
   window. Runs on **app start**, at **midnight rollover**, and **immediately**
   when the window is reduced.
+- Both DAOs and `AppLog` also expose **per-date** deletes (`deleteForDate`)
+  used by the Home **Reset today's data** action (Section 22).
 
 ---
 
@@ -674,8 +689,8 @@ The route-vertex and motion logic was hardened in `GpsFilter` and
 
 | Topic | Part I (design) | Part II (as built) |
 |---|---|---|
-| Platform | .NET MAUI | **Native Android (Kotlin/Compose)** |
-| Local DB | `sqlite-net-pcl` | **Room + KSP** |
+| UI toolkit | Android (design study) | **Kotlin + Jetpack Compose (Material 3)** |
+| Local DB | SQLite (design sketch) | **Room + KSP** |
 | Data unit | `Shift` (clock-in/out) | **Date bucket** (`DayLog` per `YYYY-MM-DD`) |
 | Trigger | Manual clock in/out | **Automatic** daily shift window (AlarmManager) |
 | Background | One foreground service | **Two** services (always-on + in-shift) |
@@ -689,6 +704,7 @@ The route-vertex and motion logic was hardened in `GpsFilter` and
 | Doze resilience | (not specified) | **Battery-optimisation exemption + 24/7 partial wake lock** |
 | OEM kill mitigation | "guide users to whitelist" | **In-app OEM-aware whitelist screen** (auto-detected) |
 | Live speed | (not specified) | **Live km/h** on Home card + tracking notification |
+| Per-day data reset | (not specified) | **"Reset today's data"** — clears today's data + log |
 
 **Not yet implemented from the design:** server sync / offline upload queue
 (Section 10), map-matching/road-snapping (Sections 7.3, 8), Douglas–Peucker
@@ -723,7 +739,7 @@ app/src/main/java/com/fieldsurvey/poc/
 ├─ MainActivity.kt               # sequential permission chain, onResume re-arm
 ├─ data/
 │  ├─ Entities.kt                # DayLog, LocationPoint
-│  ├─ Daos.kt                    # DayLogDao, LocationPointDao (+ deleteOlderThan)
+│  ├─ Daos.kt                    # DayLogDao, LocationPointDao (+ deleteOlderThan / deleteForDate)
 │  ├─ AppDatabase.kt             # Room DB
 │  ├─ SettingsRepository.kt      # DataStore: shift, accuracy, retention
 │  └─ RetentionManager.kt        # purge data + logs past retention
