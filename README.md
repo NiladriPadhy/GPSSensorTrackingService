@@ -8,6 +8,16 @@ distance is computed on-device from filtered GPS fixes using the Haversine formu
 > A detailed technical analysis is available in
 > [FieldSurveyApp_DistanceTracking_Report.md](FieldSurveyApp_DistanceTracking_Report.md).
 
+## Support
+
+> If this project helped you, consider sponsoring or buying me a coffee.
+> Your support keeps it maintained, documented, and free.
+
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=for-the-badge&logo=GitHub-Sponsors&logoColor=white)](https://github.com/sponsors/NiladriPadhy)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/npadhy)
+
+This work stays open source. A small contribution helps cover time for bug fixes, new features, and docs.
+
 ---
 
 ## Test Scenario
@@ -224,13 +234,3 @@ the script — replace with secure handling for any real release.)
 - `BootReceiver` re-arms alarms after reboot/app-update and resumes tracking if
   the device is inside an active shift window.
 - Room uses destructive migration (POC) — a schema change clears local data.
-
-## Support
-
-> If this plugin saved you a weekend of native plumbing, consider buying me a coffee.
-> Your support keeps it maintained, documented, and free.
-
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/npadhy)
-
-This library stays open source. A coffee helps cover time for bug fixes, new features, and docs.
-
